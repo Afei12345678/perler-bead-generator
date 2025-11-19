@@ -3,6 +3,7 @@ import { loadImage, imageToCanvas, resizeImage, applyImageFilters } from './util
 import { convertImageToBeads, calculateColorQuality } from './utils/colorMatcher';
 import { generatePDF, generatePatternOnlyPDF } from './utils/pdfGenerator';
 import { BeadColor, BEAD_COLORS } from './data/beadColors';
+import { BeadRenderer } from './components/BeadRenderer';
 
 type ProcessingStatus = 'idle' | 'processing' | 'completed' | 'error';
 
@@ -19,6 +20,7 @@ function App() {
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [originalCanvas, setOriginalCanvas] = useState<HTMLCanvasElement | null>(null);
   const [beadData, setBeadData] = useState<BeadColor[][] | null>(null);
+  const [beadDataNumeric, setBeadDataNumeric] = useState<number[][] | null>(null); // 存储颜色索引
   const [colorCount, setColorCount] = useState<Map<string, number>>(new Map());
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -34,6 +36,11 @@ function App() {
   const [showGrid, setShowGrid] = useState(true);
   const [showNumbers, setShowNumbers] = useState(false);
   const [cellSize, setCellSize] = useState(15);
+
+  // 拼豆渲染选项
+  const [beadSize, setBeadSize] = useState(20);
+  const [beadSpacing, setBeadSpacing] = useState(3);
+  const [useRealisticRender, setUseRealisticRender] = useState(true);
 
   // 图片滤镜
   const [filters, setFilters] = useState<ImageFilters>({
@@ -102,7 +109,7 @@ function App() {
       const imageData = ctx.getImageData(0, 0, resizedCanvas.width, resizedCanvas.height);
 
       // 转换为拼豆颜色
-      const { beadData: newBeadData, colorCount: newColorCount } = convertImageToBeads(
+      const { beadData: newBeadData, colorCount: newColorCount, numericData: newNumericData } = convertImageToBeads(
         imageData,
         {
           width: targetWidth,
@@ -113,14 +120,17 @@ function App() {
       );
 
       setBeadData(newBeadData);
+      setBeadDataNumeric(newNumericData);
       setColorCount(newColorCount);
 
       // 计算质量信息
       const quality = calculateColorQuality(imageData, newBeadData);
       setQualityInfo(quality);
 
-      // 绘制预览
-      drawPreview(newBeadData);
+      // 绘制预览（仅在非真实渲染模式下）
+      if (!useRealisticRender) {
+        drawPreview(newBeadData);
+      }
 
       setProcessingStatus('completed');
     } catch (error) {
@@ -569,6 +579,48 @@ function App() {
                     className="slider w-full"
                   />
                 </div>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={useRealisticRender}
+                    onChange={(e) => setUseRealisticRender(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">真实拼豆效果</span>
+                </label>
+
+                {useRealisticRender && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        豆子大小: {beadSize}px
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="30"
+                        value={beadSize}
+                        onChange={(e) => setBeadSize(Number(e.target.value))}
+                        className="slider w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        豆子间距: {beadSpacing}px
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="8"
+                        value={beadSpacing}
+                        onChange={(e) => setBeadSpacing(Number(e.target.value))}
+                        className="slider w-full"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -649,7 +701,18 @@ function App() {
               ) : (
                 <div className="flex justify-center">
                   <div className="overflow-auto max-h-[600px] border rounded-lg p-4 bg-white">
-                    <canvas ref={canvasRef} className="mx-auto" />
+                    {useRealisticRender && beadDataNumeric ? (
+                      <BeadRenderer
+                        beadData={beadDataNumeric}
+                        width={targetWidth}
+                        height={targetHeight}
+                        beadSize={beadSize}
+                        spacing={beadSpacing}
+                        showGrid={showGrid}
+                      />
+                    ) : (
+                      <canvas ref={canvasRef} className="mx-auto" />
+                    )}
                   </div>
                 </div>
               )}

@@ -254,14 +254,23 @@ export function convertImageToBeads(
   beadData: BeadColor[][];
   colorCount: Map<string, number>;
   totalDistance: number;
+  numericData: number[][];
 } {
   const { width, height, excludeSpecial = false, excludeTranslucent = false } = options;
   const beadData: BeadColor[][] = [];
+  const numericData: number[][] = [];
   const colorCount = new Map<string, number>();
   let totalDistance = 0;
 
+  // 创建颜色ID到数字索引的映射
+  const colorIdToIndex = new Map<string, number>();
+  BEAD_COLORS.forEach((color, index) => {
+    colorIdToIndex.set(color.id, index);
+  });
+
   for (let y = 0; y < height; y++) {
     const row: BeadColor[] = [];
+    const numericRow: number[] = [];
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
       const r = imageData.data[idx];
@@ -286,16 +295,19 @@ export function convertImageToBeads(
       totalDistance += distance;
 
       row.push(beadColor);
+      numericRow.push(colorIdToIndex.get(beadColor.id) || 0);
 
       // 统计颜色数量
       const count = colorCount.get(beadColor.id) || 0;
       colorCount.set(beadColor.id, count + 1);
     }
     beadData.push(row);
+    numericData.push(numericRow);
   }
 
   return {
     beadData,
+    numericData,
     colorCount,
     totalDistance: totalDistance / (width * height) // 平均匹配距离
   };
