@@ -40,7 +40,8 @@ function App() {
   // 拼豆渲染选项
   const [beadSize, setBeadSize] = useState(20);
   const [beadSpacing, setBeadSpacing] = useState(3);
-  const [useRealisticRender, setUseRealisticRender] = useState(true);
+  const [renderStyle, setRenderStyle] = useState<'circle' | 'square'>('square'); // 默认方形
+  const [showBeadNumbers, setShowBeadNumbers] = useState(false);
 
   // 图片滤镜
   const [filters, setFilters] = useState<ImageFilters>({
@@ -127,10 +128,7 @@ function App() {
       const quality = calculateColorQuality(imageData, newBeadData);
       setQualityInfo(quality);
 
-      // 绘制预览（仅在非真实渲染模式下）
-      if (!useRealisticRender) {
-        drawPreview(newBeadData);
-      }
+      // 不再需要传统Canvas绘制，直接使用BeadRenderer
 
       setProcessingStatus('completed');
     } catch (error) {
@@ -580,47 +578,71 @@ function App() {
                   />
                 </div>
 
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={useRealisticRender}
-                    onChange={(e) => setUseRealisticRender(e.target.checked)}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">真实拼豆效果</span>
-                </label>
-
-                {useRealisticRender && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        豆子大小: {beadSize}px
-                      </label>
+                <div>
+                  <label className="block text-sm font-medium mb-2">渲染样式</label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center">
                       <input
-                        type="range"
-                        min="10"
-                        max="30"
-                        value={beadSize}
-                        onChange={(e) => setBeadSize(Number(e.target.value))}
-                        className="slider w-full"
+                        type="radio"
+                        value="square"
+                        checked={renderStyle === 'square'}
+                        onChange={(e) => setRenderStyle(e.target.value as 'circle' | 'square')}
+                        className="mr-2"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        豆子间距: {beadSpacing}px
-                      </label>
+                      <span className="text-sm">方形色块</span>
+                    </label>
+                    <label className="flex items-center">
                       <input
-                        type="range"
-                        min="1"
-                        max="8"
-                        value={beadSpacing}
-                        onChange={(e) => setBeadSpacing(Number(e.target.value))}
-                        className="slider w-full"
+                        type="radio"
+                        value="circle"
+                        checked={renderStyle === 'circle'}
+                        onChange={(e) => setRenderStyle(e.target.value as 'circle' | 'square')}
+                        className="mr-2"
                       />
-                    </div>
-                  </>
+                      <span className="text-sm">圆形豆子</span>
+                    </label>
+                  </div>
+                </div>
+
+                {renderStyle === 'square' && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showBeadNumbers}
+                      onChange={(e) => setShowBeadNumbers(e.target.checked)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">显示色块序号</span>
+                  </label>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {renderStyle === 'circle' ? '豆子大小' : '色块大小'}: {beadSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="30"
+                    value={beadSize}
+                    onChange={(e) => setBeadSize(Number(e.target.value))}
+                    className="slider w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {renderStyle === 'circle' ? '豆子间距' : '色块间距'}: {beadSpacing}px
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="8"
+                    value={beadSpacing}
+                    onChange={(e) => setBeadSpacing(Number(e.target.value))}
+                    className="slider w-full"
+                  />
+                </div>
               </div>
             </div>
 
@@ -701,7 +723,7 @@ function App() {
               ) : (
                 <div className="flex justify-center">
                   <div className="overflow-auto max-h-[600px] border rounded-lg p-4 bg-white">
-                    {useRealisticRender && beadDataNumeric ? (
+                    {beadDataNumeric ? (
                       <BeadRenderer
                         beadData={beadDataNumeric}
                         width={targetWidth}
@@ -709,6 +731,8 @@ function App() {
                         beadSize={beadSize}
                         spacing={beadSpacing}
                         showGrid={showGrid}
+                        showNumbers={showBeadNumbers}
+                        renderStyle={renderStyle}
                       />
                     ) : (
                       <canvas ref={canvasRef} className="mx-auto" />
