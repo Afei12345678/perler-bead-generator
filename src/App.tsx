@@ -26,8 +26,8 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // 模板设置
-  const [targetWidth, setTargetWidth] = useState(29);
-  const [targetHeight, setTargetHeight] = useState(29);
+  const [targetWidth, setTargetWidth] = useState(52); // 默认中等尺寸
+  const [targetHeight, setTargetHeight] = useState(52);
   const [excludeSpecial, setExcludeSpecial] = useState(false);
   const [excludeTranslucent, setExcludeTranslucent] = useState(true);
   const [maintainAspectRatio, setMaintainAspectRatio] = useState(true);
@@ -138,6 +138,34 @@ function App() {
     }
   }, [targetWidth, targetHeight, excludeSpecial, excludeTranslucent, maintainAspectRatio, filters]);
 
+  // 辅助函数：颜色变亮
+  const lightenColor = (hex: string, percent: number): string => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+      (B < 255 ? B < 1 ? 0 : B : 255))
+      .toString(16).slice(1);
+  };
+
+  // 辅助函数：颜色变暗
+  const darkenColor = (hex: string, percent: number): string => {
+    return lightenColor(hex, -percent);
+  };
+
+  // 获取对比色
+  const getContrastColor = (hex: string): string => {
+    const color = parseInt(hex.slice(1), 16);
+    const r = (color >> 16) & 0xff;
+    const g = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128 ? '#000000' : '#ffffff';
+  };
+
   // 绘制预览
   const drawPreview = useCallback((data: BeadColor[][]) => {
     const canvas = canvasRef.current;
@@ -177,16 +205,6 @@ function App() {
       });
     });
   }, [cellSize, showGrid, showNumbers]);
-
-  // 获取对比色
-  const getContrastColor = (hex: string): string => {
-    const color = parseInt(hex.slice(1), 16);
-    const r = (color >> 16) & 0xff;
-    const g = (color >> 8) & 0xff;
-    const b = color & 0xff;
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness > 128 ? '#000000' : '#ffffff';
-  };
 
   // 重新处理（参数变化时）
   useEffect(() => {
@@ -260,18 +278,198 @@ function App() {
   };
 
   const handleExportPNG = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    // 创建临时canvas来捕获BeadRenderer的内容
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
 
-    canvas.toBlob((blob) => {
+    // 计算画布尺寸
+    const canvasWidth = targetWidth * (beadSize + beadSpacing) + beadSpacing;
+    const canvasHeight = targetHeight * (beadSize + beadSpacing) + beadSpacing;
+
+    tempCanvas.width = canvasWidth;
+    tempCanvas.height = canvasHeight;
+
+    // 设置白色背景
+    tempCtx.fillStyle = 'white';
+    tempCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // 重新渲染拼豆内容
+    if (!beadDataNumeric) return;
+
+    // 获取所有豆子数据
+    const beads = [];
+    for (let y = 0; y < targetHeight; y++) {
+      for (let x = 0; x < targetWidth; x++) {
+        const colorIndex = beadDataNumeric[y]?.[x];
+        if (colorIndex >= 0 && colorIndex < BEAD_COLORS.length) {
+          const color = BEAD_COLORS[colorIndex];
+          if (color) {
+            beads.push({
+              x: x * (beadSize + beadSpacing) + beadSpacing + beadSize / 2,
+              y: y * (beadSize + beadSpacing) + beadSpacing + beadSize / 2,
+              color: color
+            });
+          }
+        }
+      }
+    }
+
+    // 绘制网格（如果启用）
+    if (showGrid) {
+      tempCtx.strokeStyle = '#e0e0e0';
+      tempCtx.lineWidth = 1;
+
+      for (let i = 0; i <= targetWidth; i++) {
+        const x = i * (beadSize + beadSpacing) + beadSpacing;
+        tempCtx.beginPath();
+        tempCtx.moveTo(x, 0);
+        tempCtx.lineTo(x, canvasHeight);
+        tempCtx.stroke();
+      }
+
+      for (let j = 0; j <= targetHeight; j++) {
+        const y = j * (beadSize + beadSpacing) + beadSpacing;
+        tempCtx.beginPath();
+        tempCtx.moveTo(0, y);
+        tempCtx.lineTo(canvasWidth, y);
+        tempCtx.stroke();
+      }
+    }
+
+    // 绘制所有色块
+    beads.forEach(bead => {
+      const baseColor = bead.color.hex;
+
+      if (renderStyle === 'square') {
+        // 方形色块渲染
+        const x = bead.x - beadSize / 2;
+        const y = bead.y - beadSize / 2;
+
+        // 创建轻微的渐变效果
+        const gradient = tempCtx.createLinearGradient(x, y, x + beadSize, y + beadSize);
+        gradient.addColorStop(0, lightenColor(baseColor, 10));
+        gradient.addColorStop(1, darkenColor(baseColor, 10));
+
+        // 绘制方形色块
+        tempCtx.fillStyle = gradient;
+        tempCtx.fillRect(x, y, beadSize, beadSize);
+
+        // 绘制边框
+        tempCtx.strokeStyle = darkenColor(baseColor, 25);
+        tempCtx.lineWidth = 1;
+        tempCtx.strokeRect(x, y, beadSize, beadSize);
+
+        // 添加轻微高光
+        tempCtx.save();
+        tempCtx.globalAlpha = 0.3;
+        const highlightGradient = tempCtx.createLinearGradient(x, y, x, y + beadSize / 3);
+        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
+        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        tempCtx.fillStyle = highlightGradient;
+        tempCtx.fillRect(x + 1, y + 1, beadSize - 2, beadSize / 3);
+        tempCtx.restore();
+
+        // 绘制序号（如果启用）
+        if (showBeadNumbers) {
+          // 设置文字样式，支持中文
+          const fontSize = Math.max(8, Math.min(12, beadSize / 3));
+          tempCtx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", Arial, sans-serif`;
+          tempCtx.textAlign = 'center';
+          tempCtx.textBaseline = 'middle';
+
+          // 添加文字背景以提高可读性
+          const text = bead.color.id;
+          const textMetrics = tempCtx.measureText(text);
+          const textWidth = textMetrics.width;
+          const textHeight = fontSize;
+
+          tempCtx.save();
+          tempCtx.globalAlpha = 0.8;
+          tempCtx.fillStyle = 'white';
+          tempCtx.fillRect(
+            bead.x - textWidth / 2 - 2,
+            bead.y - textHeight / 2 - 1,
+            textWidth + 4,
+            textHeight + 2
+          );
+          tempCtx.restore();
+
+          // 绘制序号文字
+          tempCtx.fillStyle = getContrastColor(baseColor);
+          tempCtx.fillText(text, bead.x, bead.y);
+        }
+
+      } else {
+        // 圆形豆子渲染
+        // 绘制阴影
+        tempCtx.save();
+        tempCtx.globalAlpha = 0.3;
+        tempCtx.fillStyle = '#000000';
+        tempCtx.beginPath();
+        tempCtx.arc(bead.x + 2, bead.y + 2, beadSize / 2 - 1, 0, Math.PI * 2);
+        tempCtx.fill();
+        tempCtx.restore();
+
+        // 创建渐变效果
+        const gradient = tempCtx.createRadialGradient(
+          bead.x - beadSize / 4,
+          bead.y - beadSize / 4,
+          0,
+          bead.x,
+          bead.y,
+          beadSize / 2
+        );
+        gradient.addColorStop(0, lightenColor(baseColor, 30));
+        gradient.addColorStop(0.7, baseColor);
+        gradient.addColorStop(1, darkenColor(baseColor, 20));
+
+        // 绘制圆形豆子
+        tempCtx.fillStyle = gradient;
+        tempCtx.beginPath();
+        tempCtx.arc(bead.x, bead.y, beadSize / 2 - 1, 0, Math.PI * 2);
+        tempCtx.fill();
+
+        // 绘制豆子边框
+        tempCtx.strokeStyle = darkenColor(baseColor, 30);
+        tempCtx.lineWidth = 1;
+        tempCtx.beginPath();
+        tempCtx.arc(bead.x, bead.y, beadSize / 2 - 1, 0, Math.PI * 2);
+        tempCtx.stroke();
+
+        // 绘制高光效果
+        tempCtx.save();
+        tempCtx.globalAlpha = 0.6;
+        const highlightGradient = tempCtx.createRadialGradient(
+          bead.x - beadSize / 4,
+          bead.y - beadSize / 4,
+          0,
+          bead.x - beadSize / 4,
+          bead.y - beadSize / 4,
+          beadSize / 3
+        );
+        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        tempCtx.fillStyle = highlightGradient;
+        tempCtx.beginPath();
+        tempCtx.arc(bead.x - beadSize / 4, bead.y - beadSize / 4, beadSize / 3, 0, Math.PI * 2);
+        tempCtx.fill();
+        tempCtx.restore();
+      }
+    });
+
+    // 导出PNG（高质量）
+    tempCanvas.toBlob((blob) => {
       if (!blob) return;
 
       const link = document.createElement('a');
-      link.download = `拼豆图案_${targetWidth}x${targetHeight}_${Date.now()}.png`;
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:\-T]/g, '').slice(0, 12);
+      link.download = `拼豆图案_${renderStyle === 'square' ? '方形色块' : '圆形豆子'}_${targetWidth}x${targetHeight}_${timestamp}.png`;
       link.href = URL.createObjectURL(blob);
       link.click();
       URL.revokeObjectURL(link.href);
-    });
+    }, 'image/png', 1.0); // 最高质量
   };
 
   // 生成设置描述
@@ -405,22 +603,22 @@ function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    onClick={() => applyPresetSize(52, 52)}
+                    className="btn btn-secondary text-sm"
+                  >
+                    中等 52×52
+                  </button>
+                  <button
+                    onClick={() => applyPresetSize(72, 72)}
+                    className="btn btn-secondary text-sm"
+                  >
+                    大型 72×72
+                  </button>
+                  <button
                     onClick={() => applyPresetSize(29, 29)}
                     className="btn btn-secondary text-sm"
                   >
-                    正方形 29×29
-                  </button>
-                  <button
-                    onClick={() => applyPresetSize(29, 34)}
-                    className="btn btn-secondary text-sm"
-                  >
-                    长方形 29×34
-                  </button>
-                  <button
-                    onClick={() => applyPresetSize(50, 50)}
-                    className="btn btn-secondary text-sm"
-                  >
-                    大尺寸 50×50
+                    小型 29×29
                   </button>
                   <button
                     onClick={() => applyPresetSize(100, 100)}

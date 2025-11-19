@@ -195,9 +195,9 @@ export const BeadRenderer: React.FC<BeadRendererProps> = ({
     if (showNumbers && renderStyle === 'square') {
       beads.forEach(bead => {
 
-        // 设置文字样式
+        // 设置文字样式，支持中文
         const fontSize = Math.max(8, Math.min(12, beadSize / 3));
-        ctx.font = `${fontSize}px Arial`;
+        ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
